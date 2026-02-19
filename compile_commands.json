@@ -1,0 +1,18 @@
+[
+  {
+    "file": "src/main.cpp",
+    "arguments": [
+      "clang++",
+      "-std=c++23",
+      "-Wall",
+      "-Iinclude",
+      "-I/home/jimmy/googletest/googletest/include",
+      "-c",
+      "src/main.cpp",
+      "-o",
+      "build/main.o"
+    ],
+    "directory": "/home/jimmy/Documents/coding/cpp/ukl",
+    "output": "build/main.o"
+  }
+]
