@@ -7,20 +7,21 @@
 
 struct Ngrams {
 public:
-  inline static constexpr size_t num_chars {80};
+  inline static constexpr size_t num_chars {64};
+  inline static constexpr size_t byte_states {256};
 
-  inline static  std::array<uint32_t, num_chars> char_freqs {};
-  inline static  std::array<uint32_t, num_chars * num_chars> 
+  inline static std::array<uint64_t, byte_states + 1> char_freqs {};
+  inline static std::array<uint64_t, byte_states * byte_states> 
   bigram_freqs {},
   skipgram_freqs {},
   spacegram_freqs {};
-  inline static std::array<uint32_t, num_chars * num_chars * num_chars> trigram_freqs {};
+  inline static std::array<int64_t, byte_states * byte_states * byte_states> trigram_freqs {};
 
-  inline static std::array<int32_t, num_chars * num_chars> 
+  inline static std::array<int64_t, byte_states * byte_states> 
   bigram_asyms {},
   skipgram_asyms {},
   spacegram_asyms {};
-  inline static std::array<uint32_t, num_chars * num_chars * num_chars> trigram_asyms {};
+  inline static std::array<int64_t, byte_states * byte_states * byte_states> trigram_asyms {};
 };
 
 #endif

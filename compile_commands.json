@@ -12,7 +12,7 @@
       "-o",
       "build/main.o"
     ],
-    "directory": "/home/jimmy/Documents/coding/cpp/ukl",
+    "directory": "/home/jimmy/code/cpp/ukl",
     "output": "build/main.o"
   }
 ]

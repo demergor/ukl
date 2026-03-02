@@ -10,34 +10,46 @@
 
 namespace keyboard {
 
+extern std::atomic<bool> running;
+
 std::vector<std::vector<unsigned char>> random_layout(
   const size_t, const size_t,
   std::vector<unsigned char>,
-  const std::vector<std::pair<const size_t, const size_t>>&
+  const std::vector<std::pair<size_t, size_t>>&
 );
 
 namespace optimization {
 
 struct WorkerData {
 public:
-  static constexpr int64_t initial_max {std::numeric_limits<int64_t>::lowest()};
-  static constexpr int64_t initial_min {std::numeric_limits<int64_t>::max()};
+  Layout best, cur;
+  uint64_t num_iterations {0};
+  double 
+  pos_ema_mean,
+  sf_ema_mean,
+  flow_ema_mean,
 
-  Layout best;
-  std::vector<std::pair<Layout, int64_t>> top_ten;
-  int64_t 
-  highscore {initial_max},
-  max_position_score {initial_max},
-  max_frequency_score {initial_max},
-  max_flow_score {initial_max},
-  min_position_score {initial_min},
-  min_frequency_score {initial_min},
-  min_flow_score {initial_min};
+  pos_ema_var {1},
+  sf_ema_var {1},
+  flow_ema_var {1},
 
-  void print(std::ofstream&, const std::unordered_map<std::string, unsigned char>&) const;
+  heat {1},
+  micro {0.50},
+  meso {0.2},
+  macro {0.1},
+  imbalance {0.2},
+  alpha {1e-6};
+
+
+  explicit WorkerData(Layout);
+
+  void modify(const bool);
+  void run();
+  void print(std::ofstream&, const std::unordered_map<unsigned char, std::string>&) const;
 
 private: 
-  double normalize(const int64_t score, const int64_t max, const int64_t min) const;
+  double normalize(const double value, const double mean, const double var) const;
+  void update_ema(double& mean, double& var, const double value);
 };
 
 void run(std::atomic<long long>&, Layout&, const double&);

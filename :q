@@ -1,4 +1,3 @@
-#include <atomic>
 #include <cmath>
 #include <cstddef>
 #include <iomanip>
@@ -9,8 +8,6 @@
 
 #include "ukl/keyboard.hpp"
 #include "ukl/randomize.hpp"
-
-std::atomic<bool> keyboard::running {true};
 
 std::vector<std::vector<unsigned char>> keyboard::random_layout(
   const size_t width, const size_t height,
@@ -92,13 +89,12 @@ void keyboard::optimization::WorkerData::modify(const bool imbalanced) {
 void keyboard::optimization::WorkerData::run() {
   bool imbalanced {false};
   cur.score = 
-    0.4 * normalize(cur.pos_score, pos_ema_mean, pos_ema_var) + 
-    0.4 * normalize(cur.sf_score, sf_ema_mean, sf_ema_var) + 
-    0.2 * normalize(cur.flow_score, flow_ema_mean, flow_ema_var);
+    normalize(cur.pos_score, pos_ema_mean, pos_ema_var) + 
+    normalize(cur.sf_score, sf_ema_mean, sf_ema_var) + 
+    normalize(cur.flow_score, flow_ema_mean, flow_ema_var);
   Layout base {cur};
 
-  while (running.load()) {
-    ++num_iterations;
+  while (++num_iterations) {
     heat = heat < 0.01 ? 1 : heat * 0.999999;
     modify(imbalanced);
 

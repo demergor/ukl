@@ -1,10 +1,13 @@
+#include <algorithm>
+#include <atomic>
 #include <cassert>
 #include <chrono>
-#include <cmath>
+#include <csignal>
 #include <cstddef>
 #include <ctime>
 #include <filesystem>
 #include <fstream>
+#include <iomanip>
 #include <iostream>
 #include <stdexcept>
 #include <string>
@@ -18,8 +21,8 @@
 
 struct ShutdownHook {
 public:
-  std::vector<keyboard::optimization::WorkerData> workers;
-  std::unordered_map<std::string, unsigned char> mapping;
+  std::vector<keyboard::optimization::WorkerData>& workers;
+  std::unordered_map<unsigned char, std::string>& mapping;
 
   ~ShutdownHook() {
     auto now {std::chrono::system_clock::now()};
@@ -29,7 +32,7 @@ public:
     oss << std::put_time(std::localtime(&now_time), "%Y_%m_%d"); 
     std::string date_str = oss.str();
 
-    std::filesystem::path result_path {"../resources/results"};
+    std::filesystem::path result_path {"resources/results"};
     result_path /= "best_layouts_" + date_str + ".txt";
 
     std::ofstream output_file {result_path};
@@ -38,89 +41,40 @@ public:
       return;
     }
 
+    // TODO: Sort by layout scores first
+    std::sort(
+      workers.begin(),
+      workers.end(),
+      [] (const auto& a, const auto& b) {
+        return a.best.score > b.best.score;
+      }
+    );
+
+    uint64_t num_iterations {0};
     for (const auto& worker : workers) {
       worker.print(output_file, mapping);
+      num_iterations += worker.num_iterations;
     }
+
+    std::cout << '\n' << num_iterations << " iterations" << std::endl;
   }
 };
 
-static bool imbalanced {false};
-
-void modify(Layout& layout, const double& move_mode) {
-  static constexpr double finger {0.85};
-  static constexpr double row {finger + 0.1};
-  static constexpr double col {row + 0.05};
-
-  if (imbalanced && move_mode <= 0.8) {
-    layout.hand_shuffle();
-    imbalanced = false;
-    return;
-  }
-
-  if (move_mode >= col) {
-    layout.column_shuffle();
-  } else if (move_mode >= row) {
-    layout.row_shuffle();
-  } else if (move_mode >= finger) {
-    layout.finger_shuffle();
-  } else {
-    layout.key_pair_shuffle();
-  }
-}
-
-int optimize(std::atomic<long long>& highscore, Layout& best, double& heat) {
-  Layout base {best};
-  long long base_score {highscore};
-
-  while (true) {
-    long long score {0};
-    long long threshold {static_cast<long long>(0.9 * base_score)};
-    heat *= 0.995;
-
-    Layout candidate {base};
-    modify(candidate, randomize::random_double());
-
-    PositionScore position_score {candidate.compute_position_score()};
-    if (position_score.left_percentage < 40 || position_score.left_percentage > 60) {
-      imbalanced = true;
-    }
-
-    score += position_score.value;
-    if (score < threshold) {
-      continue;
-    }
-
-    score += candidate.compute_same_finger_score();
-    if (score < threshold) {
-      continue;
-    }
-
-    score += candidate.compute_flow_score();
-    if (score < threshold) {
-      continue;
-    }
-
-    long long delta {score - base_score};
-    if (delta < 0 && randomize::random_double() >= exp(delta / heat)) {
-      continue;
-    }
-
-    base = candidate;
-    base_score = score;
-
-    if (score > highscore) {
-      best = candidate;
-      highscore = score;
-    }
-  }
+ShutdownHook* global_sh {nullptr};
+void signal_handler(int signum) {
+  keyboard::running.store(false);
 }
 
 int main() {
+  std::signal(SIGINT, signal_handler);
+
   std::set<std::string> letters;
   std::unordered_map<std::string, unsigned char> mapping;
+  std::unordered_map<unsigned char, std::string> rev_map;
 
+  std::cout << "Generating layouts...\n";
   {
-    std::filesystem::path in_path {"../resources/frequencies/letters.txt"};
+    std::filesystem::path in_path {"resources/frequencies/letter.txt"};
     std::ifstream in_file {in_path};
 
     if (!in_file) {
@@ -129,18 +83,19 @@ int main() {
 
     letters = io::fetch_letters(in_file);
     mapping = conversion::encode(letters);
+    rev_map = conversion::rev_map(mapping);
 
     std::vector<std::filesystem::path> paths {
-      "../resources/frequencies/letters.txt",
-      "../resources/frequencies/bigram.txt",
-      "../resources/frequencies/skipgram.txt",
-      "../resources/frequencies/spacegram.txt",
-      "../resources/frequencies/trigram.txt", 
+      "resources/frequencies/letter.txt",
+      "resources/frequencies/bigram.txt",
+      "resources/frequencies/skipgram.txt",
+      "resources/frequencies/spacegram.txt",
+      "resources/frequencies/trigram.txt", 
 
-      "../resources/asymmetries/bigram.txt",
-      "../resources/asymmetries/skipgram.txt",
-      "../resources/asymmetries/spacegram.txt",
-      "../resources/asymmetries/trigram.txt", 
+      "resources/asymmetries/bigram.txt",
+      "resources/asymmetries/skipgram.txt",
+      "resources/asymmetries/spacegram.txt",
+      "resources/asymmetries/trigram.txt", 
     };
 
     for (std::size_t i {0}; i < paths.size(); ++i) {
@@ -193,13 +148,12 @@ int main() {
     encoded_letters.emplace_back(it->second);
   }
 
-  std::size_t num_threads {
-    std::thread::hardware_concurrency() ? std::thread::hardware_concurrency() : 4
-  };
+  std::size_t num_threads =
+    std::thread::hardware_concurrency() ? std::thread::hardware_concurrency() / 2: 4;
 
   std::vector<keyboard::optimization::WorkerData> workers;
-  std::vector<std::pair<const size_t, const size_t>> leave_blank {
-      {{3, 6}, {3, 7}, {4, 5}, {4, 6}, {4, 7}, {4, 8}},
+  std::vector<std::pair<size_t, size_t>> leave_blank {
+      {3, 6}, {3, 7}, {4, 5}, {4, 6}, {4, 7}, {4, 8},
   };
   std::vector<std::vector<size_t>> finger_groupings {
     {0, 1},
@@ -211,22 +165,35 @@ int main() {
     {11},
     {12, 13}
   };
+  std::vector<std::thread> threads;
 
   for (std::size_t i {0}; i < num_threads; ++i) {
     Layout layout {
-      5, 14,
+      14, 5,
       encoded_letters,
       leave_blank,
       finger_groupings
     };
 
-    // TODO: Fill out other layout data
-    keyboard::optimization::WorkerData worker {layout};
-    workers.emplace_back(worker);
-    // worker.run();
+    double temp;
+    layout.pos_score = layout.compute_pos_score(temp);
+    layout.sf_score = layout.compute_sf_score();
+    layout.flow_score = layout.compute_flow_score();
+
+    keyboard::optimization::WorkerData worker {std::move(layout)};
+    workers.emplace_back(std::move(worker));
   }
 
-  static ShutdownHook sh {workers, mapping};
+  for (size_t i {0}; i < num_threads; ++i) {
+    threads.emplace_back([&workers, i] () { workers[i].run(); });
+  }
+
+  ShutdownHook sh {workers, rev_map};
+  global_sh = &sh;
+
+  for (auto& t : threads) {
+    t.join();
+  }
 
   return 0;
 }
