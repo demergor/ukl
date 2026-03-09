@@ -89,34 +89,46 @@ void keyboard::optimization::WorkerData::modify(const bool imbalanced) {
   }
 }
 
+bool under_threshold(const int64_t score, const int64_t basis, const double factor) {
+  int64_t threshold {basis - (static_cast<int64_t>(std::abs(basis) * factor))};
+  return score < threshold;
+}
+
 void keyboard::optimization::WorkerData::run() {
   bool imbalanced {false};
   cur.score = 
-    0.4 * normalize(cur.pos_score, pos_ema_mean, pos_ema_var) + 
-    0.4 * normalize(cur.sf_score, sf_ema_mean, sf_ema_var) + 
-    0.2 * normalize(cur.flow_score, flow_ema_mean, flow_ema_var);
+    cur.pos_score + 
+    cur.sf_score +
+    cur.flow_score;
   Layout base {cur};
+  uint64_t stagnation {0};
 
   while (running.load()) {
+    ++stagnation;
     ++num_iterations;
-    heat = heat < 0.01 ? 1 : heat * 0.999999;
+
+    if (stagnation > 100'000'000) {
+      stagnation = 0;
+      heat = 0.7;
+    } else {
+      heat *= 0.9999999;
+    }
+
     modify(imbalanced);
 
     double score {0};
-    double left_percentage {0};
-
-    int64_t pos_score {cur.compute_pos_score(left_percentage)};
+    int64_t pos_score {cur.compute_pos_score()};
     cur.pos_score = pos_score;
-    score += normalize(pos_score, pos_ema_mean, pos_ema_var);
-    imbalanced = left_percentage < 40 || left_percentage > 60;
+    score += cur.pos_score;
+    imbalanced = cur.left_percentage < 40 || cur.left_percentage > 60;
 
     int64_t sf_score {cur.compute_sf_score()};
     cur.sf_score = sf_score;
-    score += normalize(sf_score, sf_ema_mean, sf_ema_var);
+    score += cur.sf_score;
 
     int64_t flow_score {cur.compute_flow_score()};
     cur.flow_score = flow_score;
-    score += normalize(flow_score, flow_ema_mean, flow_ema_var);
+    score += cur.flow_score;
 
     double delta {score - base.score};
     if (delta < 0 && randomize::random_double() >= exp(delta / heat)) {
@@ -124,15 +136,12 @@ void keyboard::optimization::WorkerData::run() {
       continue;
     }
 
-    update_ema(sf_ema_mean, sf_ema_var, sf_score);
-    update_ema(pos_ema_mean, pos_ema_var, pos_score);
-    update_ema(flow_ema_mean, flow_ema_var, flow_score);
-
     cur.score = score;
     base = cur;
 
     if (score > best.score) {
       best = cur;
+      stagnation = 0;
     }
   }
 }
@@ -158,6 +167,9 @@ void keyboard::optimization::WorkerData::print(
   os.imbue(std::locale(""));
   os << 
     "\n" <<
+    "Balance: " << std::fixed << std::setprecision(2) <<
+    best.left_percentage * 100 << " | " << (1.0 - best.left_percentage) * 100 << '\n' <<
+    std::defaultfloat <<
     "Position score: " << best.pos_score << '\n' <<
     "Same finger score: " << best.sf_score << '\n' <<
     "Flow score: " << best.flow_score << '\n' <<

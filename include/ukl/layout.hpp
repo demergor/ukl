@@ -22,7 +22,7 @@ public:
   std::vector<std::vector<unsigned char>> keys;
   std::vector<std::vector<std::pair<size_t, size_t>>> finger_pos;
 
-  double score;
+  double score, left_percentage;
   int64_t pos_score, sf_score, flow_score;
 
   Layout(
@@ -42,16 +42,16 @@ public:
   void row_shuffle();
   void simple_swap();
 
-  int64_t compute_pos_score(double&);
+  int64_t compute_pos_score();
   int64_t compute_sf_score();
   int64_t compute_flow_score();
 
   Layout& operator=(const Layout&) = default;
 
 private:
-  inline static const int row_multipliers[5] {-8, 1, 10, -5, -10};
+  inline static const int row_multipliers[5] {-300, 1, 100, -10, -500};
   inline static const int col_multipliers[14] {
-    -10, -5, -2, 5, 1, -6, -20, -20, -6, 1, 5, -2, -5, -10
+    -200, -10, -5, 100, 50, -20, -1000, -1000, -20, 50, 100, -5, -10, -200
   };
 
   int64_t horizontal_flow_score(const size_t, const size_t, const int) const;

@@ -192,7 +192,7 @@ void Layout::simple_swap() {
   );
 }
 
-int64_t Layout::compute_pos_score(double& lpercent) {
+int64_t Layout::compute_pos_score() {
   int64_t pos_score {0};
   double lscore {0};
   double rscore {0};
@@ -211,7 +211,9 @@ int64_t Layout::compute_pos_score(double& lpercent) {
     }
   }
 
-  lpercent = lscore / (rscore + lscore);
+  left_percentage = lscore / (rscore + lscore);
+  pos_score /= 100'000;
+  pos_score *= 4;
   this->pos_score = pos_score;
 
   return pos_score;
@@ -238,8 +240,10 @@ int64_t Layout::compute_sf_score() {
     }
   }
 
-  sf_score = -score;
-  return -score;
+  score /= -100;
+  score *= 8;
+  sf_score = score;
+  return score;
 }
 
 int64_t Layout::compute_flow_score() {
@@ -248,8 +252,9 @@ int64_t Layout::compute_flow_score() {
   score += diagonal_flow_score(0, last_left, 1);
   score += diagonal_flow_score(first_right, finger_pos.size() - 1, -1);
 
-  flow_score = score;
-  return score;
+  flow_score = score / 100;
+  flow_score *= 2;
+  return flow_score;
 }
 
 int64_t Layout::horizontal_flow_score(

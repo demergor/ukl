@@ -149,7 +149,7 @@ int main() {
   }
 
   std::size_t num_threads =
-    std::thread::hardware_concurrency() ? std::thread::hardware_concurrency() / 2: 4;
+    std::thread::hardware_concurrency() ? std::thread::hardware_concurrency(): 4;
 
   std::vector<keyboard::optimization::WorkerData> workers;
   std::vector<std::pair<size_t, size_t>> leave_blank {
@@ -175,10 +175,13 @@ int main() {
       finger_groupings
     };
 
-    double temp;
-    layout.pos_score = layout.compute_pos_score(temp);
+    layout.pos_score = layout.compute_pos_score();
     layout.sf_score = layout.compute_sf_score();
     layout.flow_score = layout.compute_flow_score();
+    layout.score = 
+      layout.pos_score +
+      layout.sf_score +
+      layout.flow_score;
 
     keyboard::optimization::WorkerData worker {std::move(layout)};
     workers.emplace_back(std::move(worker));

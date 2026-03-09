@@ -33,7 +33,7 @@ public:
   sf_ema_var {1},
   flow_ema_var {1},
 
-  heat {1},
+  heat {1000},
   micro {0.50},
   meso {0.2},
   macro {0.1},
